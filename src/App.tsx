@@ -20,7 +20,13 @@ import {
   Type as TypeIcon,
   Link as LinkIcon,
   Database,
-  ExternalLink
+  ExternalLink,
+  ListOrdered,
+  MapPin,
+  Code2,
+  Tags,
+  Layers,
+  Lightbulb
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -70,7 +76,6 @@ export default function App() {
 
   const analyzeUrl = async (url: string): Promise<AnalysisResult> => {
     try {
-      // 1. Fetch HTML content via proxy
       const fetchResponse = await fetch('/api/fetch-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -83,35 +88,34 @@ export default function App() {
 
       const { html } = await fetchResponse.json();
 
-      // 2. Analyze with Gemini
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Analyze the following HTML content for SEO and GEO optimization criteria for VW PKW.
+        contents: `Analyze the following HTML content for the presence and quality of a Table of Contents (ToC) for VW PKW.
         
         HTML Content (truncated if too long):
         ${html.substring(0, 30000)}
         
-        Check the following points:
-        1. Missing Table of Contents (ToC): Is there a clear navigation or ToC for the page content?
-        2. Deep-Linkable Anchor Tags: Are headings or sections equipped with IDs that can be linked directly?
-        3. Natural Language & Question-Based Headings: Are headings formulated as questions or in natural language?
-        4. High Information Density (Keywords as Entities): Does the content treat keywords as entities with rich information?
-        5. Semantic HTML Structure: Does the page use proper semantic tags (h1-h6, main, section, article)?
+        Check the following points for the Table of Contents:
+        1. Placement: Is it above the fold, after the intro? (Keeps users on page; defines the topic immediately).
+        2. HTML Tags: Does it use <ul> and <li> with anchor links? (Standardized code is easier for crawlers to parse).
+        3. Keywords: Does it use descriptive, keyword-rich headings? (Tells SEO/AI exactly what each section covers).
+        4. Nesting: Does it use H2 and H3 hierarchy? (Shows the relationship between sub-topics).
         
-        Provide a summary of findings for each point.`,
+        Provide a summary of findings and specific suggestions for improvement.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              missingToC: { type: Type.BOOLEAN, description: "True if ToC is missing" },
-              deepLinkableAnchors: { type: Type.BOOLEAN, description: "True if sections have linkable IDs" },
-              naturalLanguageHeadings: { type: Type.BOOLEAN, description: "True if headings use natural language/questions" },
-              highInformationDensity: { type: Type.BOOLEAN, description: "True if content is entity-rich" },
-              semanticHtml: { type: Type.BOOLEAN, description: "True if HTML structure is semantic" },
-              summary: { type: Type.STRING, description: "Detailed summary of findings in Markdown" }
+              tocExists: { type: Type.BOOLEAN, description: "True if a Table of Contents exists" },
+              placementRespected: { type: Type.BOOLEAN, description: "True if placement is above the fold/after intro" },
+              htmlTagsRespected: { type: Type.BOOLEAN, description: "True if <ul>/<li> with anchor links are used" },
+              keywordsRespected: { type: Type.BOOLEAN, description: "True if descriptive, keyword-rich headings are used" },
+              nestingRespected: { type: Type.BOOLEAN, description: "True if H2 and H3 hierarchy is used" },
+              suggestions: { type: Type.STRING, description: "Specific suggestions for improvement" },
+              summary: { type: Type.STRING, description: "General summary of the ToC analysis" }
             },
-            required: ["missingToC", "deepLinkableAnchors", "naturalLanguageHeadings", "highInformationDensity", "semanticHtml", "summary"]
+            required: ["tocExists", "placementRespected", "htmlTagsRespected", "keywordsRespected", "nestingRespected", "suggestions", "summary"]
           }
         }
       });
@@ -128,11 +132,12 @@ export default function App() {
       return {
         url,
         status: 'error',
-        missingToC: false,
-        deepLinkableAnchors: false,
-        naturalLanguageHeadings: false,
-        highInformationDensity: false,
-        semanticHtml: false,
+        tocExists: false,
+        placementRespected: false,
+        htmlTagsRespected: false,
+        keywordsRespected: false,
+        nestingRespected: false,
+        suggestions: '',
         summary: '',
         error: error.message
       };
@@ -147,11 +152,12 @@ export default function App() {
     setResults(urlList.map(url => ({
       url,
       status: 'pending',
-      missingToC: false,
-      deepLinkableAnchors: false,
-      naturalLanguageHeadings: false,
-      highInformationDensity: false,
-      semanticHtml: false,
+      tocExists: false,
+      placementRespected: false,
+      htmlTagsRespected: false,
+      keywordsRespected: false,
+      nestingRespected: false,
+      suggestions: '',
       summary: ''
     })));
 
@@ -169,19 +175,20 @@ export default function App() {
     const data = results.map(r => ({
       URL: r.url,
       Status: r.status,
-      'Missing ToC': r.missingToC ? 'Yes' : 'No',
-      'Deep-Linkable Anchors': r.deepLinkableAnchors ? 'Yes' : 'No',
-      'Natural Language Headings': r.naturalLanguageHeadings ? 'Yes' : 'No',
-      'High Info Density': r.highInformationDensity ? 'Yes' : 'No',
-      'Semantic HTML': r.semanticHtml ? 'Yes' : 'No',
+      'ToC Exists': r.tocExists ? 'Yes' : 'No',
+      'Placement Respected': r.tocExists ? (r.placementRespected ? 'Yes' : 'No') : 'N/A',
+      'HTML Tags Respected': r.tocExists ? (r.htmlTagsRespected ? 'Yes' : 'No') : 'N/A',
+      'Keywords Respected': r.tocExists ? (r.keywordsRespected ? 'Yes' : 'No') : 'N/A',
+      'Nesting Respected': r.tocExists ? (r.nestingRespected ? 'Yes' : 'No') : 'N/A',
+      Suggestions: r.suggestions,
       Summary: r.summary,
       Error: r.error || ''
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Analysis Results");
-    XLSX.writeFile(workbook, `VW_SEO_Analysis_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "ToC Analysis Results");
+    XLSX.writeFile(workbook, `VW_ToC_Analysis_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   return (
@@ -191,11 +198,11 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-black rounded-xl flex items-center justify-center">
-              <Globe className="text-white w-6 h-6" />
+              <ListOrdered className="text-white w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">VW PKW SEO/GEO Control</h1>
-              <p className="text-xs text-black/50 font-medium uppercase tracking-wider">Analysis Tool v1.0</p>
+              <h1 className="text-xl font-semibold tracking-tight">VW SEO/GEO ToC Control</h1>
+              <p className="text-xs text-black/50 font-medium uppercase tracking-wider">Missing ToC Analysis v2.0</p>
             </div>
           </div>
           {results.length > 0 && (
@@ -221,23 +228,25 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-6 py-8 space-y-8">
         {/* Intro Section */}
         <section className="bg-white rounded-2xl p-8 shadow-sm border border-black/5">
-          <h2 className="text-2xl font-semibold mb-4">Analyze SEO & GEO Performance</h2>
+          <h2 className="text-2xl font-semibold mb-4">Table of Contents Analysis</h2>
           <p className="text-black/60 mb-6 leading-relaxed">
-            With this tool, we can analyze the following points:
-            <br />
-            <span className="inline-block mt-2 font-medium text-black">• Missing ToC on relevant pages</span>
+            Analyze the presence and quality of Table of Contents (ToC) elements based on the following rules:
           </p>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { icon: LinkIcon, label: "Deep-Linkable Anchors" },
-              { icon: TypeIcon, label: "Natural Language Headings" },
-              { icon: Database, label: "High Info Density" },
-              { icon: Layout, label: "Semantic HTML Structure" }
+              { icon: MapPin, label: "Placement", desc: "Above the fold, after the intro", why: "Keeps users on page; defines topic immediately" },
+              { icon: Code2, label: "HTML Tags", desc: "Use <ul> and <li> with anchor links", why: "Standardized code is easier for crawlers" },
+              { icon: Tags, label: "Keywords", desc: "Descriptive, keyword-rich headings", why: "Tells SEO/AI exactly what section covers" },
+              { icon: Layers, label: "Nesting", desc: "Use H2 and H3 hierarchy", why: "Shows relationship between sub-topics" }
             ].map((item, i) => (
-              <div key={i} className="flex items-center gap-3 p-4 bg-[#f9f9f9] rounded-xl border border-black/5">
-                <item.icon className="w-5 h-5 text-black/40" />
-                <span className="text-sm font-medium">{item.label}</span>
+              <div key={i} className="flex flex-col gap-2 p-4 bg-[#f9f9f9] rounded-xl border border-black/5">
+                <div className="flex items-center gap-2">
+                  <item.icon className="w-4 h-4 text-black/40" />
+                  <span className="text-sm font-bold">{item.label}</span>
+                </div>
+                <p className="text-xs font-medium text-black/80">{item.desc}</p>
+                <p className="text-[10px] text-black/40 italic">Why: {item.why}</p>
               </div>
             ))}
           </div>
@@ -345,26 +354,41 @@ export default function App() {
                         </div>
 
                         {result.status === 'success' && (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                            {[
-                              { label: 'ToC Present', value: !result.missingToC },
-                              { label: 'Deep Links', value: result.deepLinkableAnchors },
-                              { label: 'Natural Headings', value: result.naturalLanguageHeadings },
-                              { label: 'Info Density', value: result.highInformationDensity },
-                              { label: 'Semantic HTML', value: result.semanticHtml }
-                            ].map((check, i) => (
-                              <div key={i} className="p-3 rounded-xl bg-[#f9f9f9] border border-black/5 space-y-2">
-                                <p className="text-[10px] font-bold uppercase tracking-wider text-black/40">{check.label}</p>
-                                <div className="flex items-center gap-2">
-                                  {check.value ? (
-                                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                                  ) : (
-                                    <XCircle className="w-4 h-4 text-rose-500" />
-                                  )}
-                                  <span className="text-xs font-semibold">{check.value ? 'Pass' : 'Fail'}</span>
-                                </div>
+                          <div className="space-y-4">
+                            <div className="flex items-center gap-4 p-3 bg-[#f9f9f9] rounded-xl border border-black/5">
+                              <p className="text-xs font-bold uppercase tracking-wider text-black/40">ToC Exists:</p>
+                              <div className="flex items-center gap-2">
+                                {result.tocExists ? (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                ) : (
+                                  <XCircle className="w-4 h-4 text-rose-500" />
+                                )}
+                                <span className="text-sm font-bold">{result.tocExists ? 'YES' : 'NO'}</span>
                               </div>
-                            ))}
+                            </div>
+
+                            {result.tocExists && (
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                {[
+                                  { label: 'Placement', value: result.placementRespected },
+                                  { label: 'HTML Tags', value: result.htmlTagsRespected },
+                                  { label: 'Keywords', value: result.keywordsRespected },
+                                  { label: 'Nesting', value: result.nestingRespected }
+                                ].map((check, i) => (
+                                  <div key={i} className="p-3 rounded-xl bg-[#f9f9f9] border border-black/5 space-y-2">
+                                    <p className="text-[10px] font-bold uppercase tracking-wider text-black/40">{check.label}</p>
+                                    <div className="flex items-center gap-2">
+                                      {check.value ? (
+                                        <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                                      ) : (
+                                        <XCircle className="w-4 h-4 text-rose-500" />
+                                      )}
+                                      <span className="text-xs font-semibold">{check.value ? 'Pass' : 'Fail'}</span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -384,10 +408,20 @@ export default function App() {
                       </div>
 
                       {result.status === 'success' && (
-                        <div className="md:w-1/3 bg-[#f9f9f9] p-6 rounded-xl border border-black/5">
-                          <h5 className="text-xs font-bold uppercase tracking-wider text-black/40 mb-3">Analysis Summary</h5>
-                          <div className="prose prose-sm max-w-none text-sm text-black/70 leading-relaxed">
-                            <Markdown>{result.summary}</Markdown>
+                        <div className="md:w-1/3 space-y-4">
+                          <div className="bg-[#f9f9f9] p-6 rounded-xl border border-black/5">
+                            <h5 className="text-xs font-bold uppercase tracking-wider text-black/40 mb-3 flex items-center gap-2">
+                              <Lightbulb className="w-3 h-3" /> Suggestions
+                            </h5>
+                            <div className="prose prose-sm max-w-none text-sm text-black/70 leading-relaxed">
+                              <Markdown>{result.suggestions}</Markdown>
+                            </div>
+                          </div>
+                          <div className="bg-[#f9f9f9] p-6 rounded-xl border border-black/5">
+                            <h5 className="text-xs font-bold uppercase tracking-wider text-black/40 mb-3">Summary</h5>
+                            <div className="prose prose-sm max-w-none text-sm text-black/70 leading-relaxed">
+                              <Markdown>{result.summary}</Markdown>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -402,7 +436,7 @@ export default function App() {
 
       <footer className="max-w-7xl mx-auto px-6 py-12 border-t border-black/5">
         <p className="text-center text-xs text-black/30 font-medium">
-          &copy; {new Date().getFullYear()} VW PKW SEO/GEO Control Elements Tool. All rights reserved.
+          &copy; {new Date().getFullYear()} VW SEO/GEO ToC Control Elements Tool. All rights reserved.
         </p>
       </footer>
     </div>

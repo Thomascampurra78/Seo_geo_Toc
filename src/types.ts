@@ -1,11 +1,12 @@
 export interface AnalysisResult {
   url: string;
   status: 'pending' | 'success' | 'error';
-  missingToC: boolean;
-  deepLinkableAnchors: boolean;
-  naturalLanguageHeadings: boolean;
-  highInformationDensity: boolean;
-  semanticHtml: boolean;
+  tocExists: boolean;
+  placementRespected: boolean;
+  htmlTagsRespected: boolean;
+  keywordsRespected: boolean;
+  nestingRespected: boolean;
+  suggestions: string;
   summary: string;
   error?: string;
 }
